@@ -3,7 +3,7 @@ import { cartService } from '@vee/core';
 import { addToCartSchema } from '@vee/shared';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 const SESSION_COOKIE = 'vee_session';
 const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     // Mint a session if no identity exists
     const isNewSession = !customerId && !sessionId;
     if (isNewSession) {
-      sessionId = uuidv4();
+      sessionId = randomUUID();
     }
 
     const cart = await cartService.getOrCreate(customerId, sessionId);

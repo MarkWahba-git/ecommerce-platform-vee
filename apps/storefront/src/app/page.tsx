@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function HomePage() {
   return (
-    <main>
+    <>
       {/* Hero Section */}
       <section className="flex min-h-[70vh] flex-col items-center justify-center bg-secondary px-4 text-center">
         <h1 className="text-5xl font-bold tracking-tight text-foreground md:text-7xl">
@@ -68,6 +68,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-    </main>
+    </>
   );
 }
