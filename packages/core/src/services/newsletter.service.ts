@@ -69,8 +69,9 @@ export class NewsletterService {
     try {
       const { NewsletterConfirmationEmail } = await import('@vee/email-templates');
       const { render } = await import('@react-email/render');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const html = await render(
-        NewsletterConfirmationEmail({ confirmationUrl, firstName }) as React.ReactElement,
+        NewsletterConfirmationEmail({ confirmationUrl, firstName }) as any,
       );
 
       await resend.emails.send({
@@ -124,8 +125,9 @@ export class NewsletterService {
       const { NewsletterWelcomeEmail } = await import('@vee/email-templates');
       const { render } = await import('@react-email/render');
       const unsubscribeUrl = `${SITE_URL}/newsletter/unsubscribe?email=${encodeURIComponent(email)}&token=${generateToken(email)}`;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const html = await render(
-        NewsletterWelcomeEmail({ unsubscribeUrl }) as React.ReactElement,
+        NewsletterWelcomeEmail({ unsubscribeUrl }) as any,
       );
 
       await resend.emails.send({
