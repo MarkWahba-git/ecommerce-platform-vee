@@ -95,7 +95,7 @@ export default async function OrderDetailPage({
 
   const transitions = ORDER_STATUS_TRANSITIONS[order.status as OrderStatus] ?? [];
   const customerName = order.customer
-    ? `${order.customer.firstName} ${order.customer.lastName}`.trim()
+    ? [order.customer.firstName, order.customer.lastName].filter(Boolean).join(' ') || order.customer.email
     : null;
 
   return (
@@ -182,10 +182,10 @@ export default async function OrderDetailPage({
                     </td>
                     <td className="py-2.5 text-center text-sm text-gray-700">{item.quantity}</td>
                     <td className="py-2.5 text-right text-sm text-gray-700">
-                      {formatPrice(item.unitPrice, order.currency)}
+                      {formatPrice(Number(item.unitPrice), order.currency)}
                     </td>
                     <td className="py-2.5 text-right text-sm font-medium text-gray-900">
-                      {formatPrice(item.totalPrice, order.currency)}
+                      {formatPrice(Number(item.totalPrice), order.currency)}
                     </td>
                   </tr>
                 ))}
@@ -194,19 +194,19 @@ export default async function OrderDetailPage({
 
             {/* Order totals */}
             <dl className="mt-4 divide-y divide-gray-100 border-t border-gray-200">
-              <DefinitionRow label="Subtotal" value={formatPrice(order.subtotal, order.currency)} />
-              {order.discountAmount > 0 && (
+              <DefinitionRow label="Subtotal" value={formatPrice(Number(order.subtotal), order.currency)} />
+              {Number(order.discountAmount) > 0 && (
                 <DefinitionRow
                   label={`Discount${order.couponCode ? ` (${order.couponCode})` : ''}`}
-                  value={`-${formatPrice(order.discountAmount, order.currency)}`}
+                  value={`-${formatPrice(Number(order.discountAmount), order.currency)}`}
                 />
               )}
-              <DefinitionRow label="Shipping" value={formatPrice(order.shippingCost, order.currency)} />
-              <DefinitionRow label="Tax" value={formatPrice(order.taxAmount, order.currency)} />
+              <DefinitionRow label="Shipping" value={formatPrice(Number(order.shippingCost), order.currency)} />
+              <DefinitionRow label="Tax" value={formatPrice(Number(order.taxAmount), order.currency)} />
               <div className="flex items-center justify-between py-2">
                 <dt className="text-sm font-semibold text-gray-900">Total</dt>
                 <dd className="text-sm font-semibold text-gray-900">
-                  {formatPrice(order.total, order.currency)}
+                  {formatPrice(Number(order.total), order.currency)}
                 </dd>
               </div>
             </dl>
@@ -230,7 +230,7 @@ export default async function OrderDetailPage({
                         styleClass={PAYMENT_STATUS_STYLES[p.status] ?? PAYMENT_STATUS_STYLES.PENDING}
                       />
                       <span className="text-sm font-medium text-gray-900">
-                        {formatPrice(p.amount, p.currency)}
+                        {formatPrice(Number(p.amount), p.currency)}
                       </span>
                     </div>
                   </div>

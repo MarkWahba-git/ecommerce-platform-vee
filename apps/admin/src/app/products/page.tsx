@@ -176,7 +176,7 @@ export default async function ProductsPage() {
                   </td>
 
                   <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-700">
-                    {formatPrice(product.basePrice)}
+                    {formatPrice(Number(product.basePrice))}
                   </td>
 
                   <td className="whitespace-nowrap px-3 py-3 text-sm">

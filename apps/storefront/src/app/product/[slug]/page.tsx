@@ -78,13 +78,11 @@ const typeLabel: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Page
+// DB query (defined here so the FullProduct type can be derived)
 // ---------------------------------------------------------------------------
 
-export default async function ProductPage({ params }: ProductPageProps) {
-  const { slug } = await params;
-
-  const product = await db.product.findUnique({
+async function fetchFullProduct(slug: string) {
+  return db.product.findUnique({
     where: { slug },
     include: {
       images: { orderBy: { sortOrder: 'asc' } },
@@ -112,6 +110,18 @@ export default async function ProductPage({ params }: ProductPageProps) {
       seoMeta: true,
     },
   });
+}
+
+type FullProduct = NonNullable<Awaited<ReturnType<typeof fetchFullProduct>>>;
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default async function ProductPage({ params }: ProductPageProps) {
+  const { slug } = await params;
+
+  const product = await fetchFullProduct(slug);
 
   if (!product || product.status !== 'ACTIVE') {
     notFound();
@@ -380,29 +390,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-type ProductWithIncludes = Awaited<ReturnType<typeof db.product.findUnique>> & {
-  variants: Array<{
-    id: string;
-    sku: string;
-    name: string;
-    price: { toString(): string } | null;
-    options: unknown;
-    isActive: boolean;
-    inventory: { quantity: number; reservedQuantity: number } | null;
-  }>;
-  personalizationFields: Array<{
-    id: string;
-    fieldName: string;
-    label: string;
-    type: string;
-    required: boolean;
-    options: unknown;
-    maxLength: number | null;
-    priceSurcharge: { toString(): string } | null;
-  }>;
-};
-
-function PhysicalSection({ product }: { product: NonNullable<ProductWithIncludes> }) {
+function PhysicalSection({ product }: { product: FullProduct }) {
   return (
     <div className="space-y-4">
       {product.variants.length > 0 && (
@@ -453,7 +441,7 @@ function PhysicalSection({ product }: { product: NonNullable<ProductWithIncludes
   );
 }
 
-function DigitalSection({ product }: { product: NonNullable<ProductWithIncludes> }) {
+function DigitalSection({ product }: { product: FullProduct }) {
   return (
     <div className="space-y-3 rounded-lg border border-accent/30 bg-accent/5 p-4">
       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">

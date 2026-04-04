@@ -210,7 +210,7 @@ export default async function OrdersPage({
                   </td>
 
                   <td className="whitespace-nowrap px-3 py-3 text-right text-sm font-medium text-gray-900">
-                    {formatPrice(order.total, order.currency)}
+                    {formatPrice(Number(order.total), order.currency)}
                   </td>
 
                   <td className="whitespace-nowrap py-3 pl-3 pr-4 text-right text-sm sm:pr-6">
