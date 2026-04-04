@@ -1,4 +1,6 @@
 import { randomUUID } from 'crypto';
+import { render } from '@react-email/render';
+import { NewsletterConfirmationEmail, NewsletterWelcomeEmail } from '@vee/email-templates';
 import { db } from '@vee/db';
 import { resend, EMAIL_FROM } from '../lib/email';
 
@@ -64,31 +66,15 @@ export class NewsletterService {
     const token = generateToken(email);
     const confirmationUrl = `${SITE_URL}/newsletter/confirm?token=${token}`;
 
-    // Dynamically import to avoid bundling email templates on the server path
-    // that don't use them. Falls back gracefully if the package isn't available.
-    try {
-      const { NewsletterConfirmationEmail } = await import('@vee/email-templates');
-      const { render } = await import('@react-email/render');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const html = await render(
-        NewsletterConfirmationEmail({ confirmationUrl, firstName }) as any,
-      );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const html = await render(NewsletterConfirmationEmail({ confirmationUrl, firstName }) as any);
 
-      await resend.emails.send({
-        from: EMAIL_FROM,
-        to: email,
-        subject: 'Bitte bestätige deine Newsletter-Anmeldung – Vee',
-        html,
-      });
-    } catch {
-      // Fallback plain-text confirmation if template rendering fails
-      await resend.emails.send({
-        from: EMAIL_FROM,
-        to: email,
-        subject: 'Bitte bestätige deine Newsletter-Anmeldung – Vee',
-        html: `<p>Bitte bestätige deine Anmeldung: <a href="${confirmationUrl}">${confirmationUrl}</a></p>`,
-      });
-    }
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: email,
+      subject: 'Bitte bestätige deine Newsletter-Anmeldung – Vee',
+      html,
+    });
 
     return { alreadySubscribed: false };
   }
@@ -120,24 +106,19 @@ export class NewsletterService {
       });
     }
 
-    // Send welcome email
+    // Send welcome email (non-fatal if it fails)
     try {
-      const { NewsletterWelcomeEmail } = await import('@vee/email-templates');
-      const { render } = await import('@react-email/render');
       const unsubscribeUrl = `${SITE_URL}/newsletter/unsubscribe?email=${encodeURIComponent(email)}&token=${generateToken(email)}`;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const html = await render(
-        NewsletterWelcomeEmail({ unsubscribeUrl }) as any,
-      );
-
+      const welcomeHtml = await render(NewsletterWelcomeEmail({ unsubscribeUrl }) as any);
       await resend.emails.send({
         from: EMAIL_FROM,
         to: email,
-        subject: 'Willkommen bei Vee! 🎉',
-        html,
+        subject: 'Willkommen bei Vee!',
+        html: welcomeHtml,
       });
-    } catch {
-      // Non-fatal: welcome email failed
+    } catch (err) {
+      console.warn('[newsletter] Welcome email failed', err);
     }
 
     return true;

@@ -22,6 +22,7 @@ import {
   Menu,
   X,
   Store,
+  Palette,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -38,8 +39,9 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',  href: '/',           icon: LayoutDashboard },
   { label: 'Products',   href: '/products',   icon: Package },
   { label: 'Categories', href: '/categories', icon: FolderOpen },
-  { label: 'Orders',     href: '/orders',     icon: ShoppingCart },
-  { label: 'Customers',  href: '/customers',  icon: Users },
+  { label: 'Orders',         href: '/orders',        icon: ShoppingCart },
+  { label: 'Custom Orders',  href: '/custom-orders', icon: Palette },
+  { label: 'Customers',      href: '/customers',     icon: Users },
   { label: 'Inventory',  href: '/inventory',  icon: Warehouse },
   { label: 'Discounts',  href: '/discounts',  icon: Tag },
   { label: 'Content',    href: '/content',    icon: FileText },

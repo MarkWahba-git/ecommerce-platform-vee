@@ -8,6 +8,7 @@ const navItems = [
   { href: '/account', label: 'Übersicht', exact: true },
   { href: '/account/orders', label: 'Bestellungen' },
   { href: '/account/downloads', label: 'Downloads' },
+  { href: '/account/custom-orders', label: 'Individuelle Bestellungen' },
   { href: '/account/wishlist', label: 'Wunschliste' },
   { href: '/account/addresses', label: 'Adressen' },
   { href: '/account/settings', label: 'Einstellungen' },
