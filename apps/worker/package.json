@@ -12,7 +12,10 @@
   "dependencies": {
     "@vee/core": "workspace:*",
     "@vee/db": "workspace:*",
+    "@vee/email-templates": "workspace:*",
     "@vee/shared": "workspace:*",
+    "@react-email/render": "^1.0.5",
+    "react": "^19.0.0",
     "bullmq": "^5.25.6",
     "ioredis": "^5.4.1"
   },

@@ -5,3 +5,5 @@ export { orderService, OrderService } from './order.service';
 export { digitalDeliveryService, DigitalDeliveryService } from './digital-delivery.service';
 export { customOrderService, CustomOrderService } from './custom-order.service';
 export type { CustomOrderListFilters } from './custom-order.service';
+export { channelSyncService, ChannelSyncService } from './channel-sync.service';
+export { newsletterService, NewsletterService } from './newsletter.service';

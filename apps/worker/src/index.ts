@@ -1,18 +1,37 @@
 import { Worker } from 'bullmq';
 import Redis from 'ioredis';
+import { render } from '@react-email/render';
+import { channelSyncService, resend, EMAIL_FROM } from '@vee/core';
+import { db } from '@vee/db';
+import {
+  OrderConfirmationEmail,
+  ShippingNotificationEmail,
+  DownloadReadyEmail,
+  AbandonedCartEmail,
+} from '@vee/email-templates';
 
 const connection = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
 });
 
+const STORE_URL = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? 'https://vee-handmade.de';
+
 console.log('Starting Vee workers...');
 
-// Sync Inventory Worker
+// ─── Sync Inventory Worker ────────────────────────────────────────────────────
+// Job data: { marketplaceId: string }
 const syncInventoryWorker = new Worker(
   'sync-inventory',
   async (job) => {
-    console.log(`[sync-inventory] Processing job ${job.id}`, job.data);
-    // TODO: Implement inventory sync via channel connector
+    const { marketplaceId } = job.data as { marketplaceId: string };
+    console.log(`[sync-inventory] job=${job.id} marketplaceId=${marketplaceId}`);
+
+    if (!marketplaceId) {
+      throw new Error('sync-inventory job missing marketplaceId');
+    }
+
+    await channelSyncService.syncInventoryToChannel(marketplaceId);
+    console.log(`[sync-inventory] job=${job.id} completed`);
   },
   {
     connection,
@@ -21,12 +40,21 @@ const syncInventoryWorker = new Worker(
   },
 );
 
-// Import Orders Worker
+// ─── Import Orders Worker ─────────────────────────────────────────────────────
+// Job data: { marketplaceId: string; since?: string } (since is ISO date string)
 const importOrdersWorker = new Worker(
   'import-orders',
   async (job) => {
-    console.log(`[import-orders] Processing job ${job.id}`, job.data);
-    // TODO: Implement order import via channel connector
+    const { marketplaceId, since } = job.data as { marketplaceId: string; since?: string };
+    console.log(`[import-orders] job=${job.id} marketplaceId=${marketplaceId} since=${since}`);
+
+    if (!marketplaceId) {
+      throw new Error('import-orders job missing marketplaceId');
+    }
+
+    const sinceDate = since ? new Date(since) : undefined;
+    await channelSyncService.importOrdersFromChannel(marketplaceId, sinceDate);
+    console.log(`[import-orders] job=${job.id} completed`);
   },
   {
     connection,
@@ -34,12 +62,20 @@ const importOrdersWorker = new Worker(
   },
 );
 
-// Push Fulfillment Worker
+// ─── Push Fulfillment Worker ──────────────────────────────────────────────────
+// Job data: { orderId: string }
 const pushFulfillmentWorker = new Worker(
   'push-fulfillment',
   async (job) => {
-    console.log(`[push-fulfillment] Processing job ${job.id}`, job.data);
-    // TODO: Implement fulfillment push via channel connector
+    const { orderId } = job.data as { orderId: string };
+    console.log(`[push-fulfillment] job=${job.id} orderId=${orderId}`);
+
+    if (!orderId) {
+      throw new Error('push-fulfillment job missing orderId');
+    }
+
+    await channelSyncService.pushFulfillmentToChannel(orderId);
+    console.log(`[push-fulfillment] job=${job.id} completed`);
   },
   {
     connection,
@@ -47,12 +83,175 @@ const pushFulfillmentWorker = new Worker(
   },
 );
 
-// Email Worker
+// ─── Email Worker ─────────────────────────────────────────────────────────────
+// Job data: { type, to, ... } — see switch cases below
 const emailWorker = new Worker(
   'email',
   async (job) => {
-    console.log(`[email] Processing job ${job.id}`, job.data);
-    // TODO: Implement email sending via Resend
+    const { type, to } = job.data as { type: string; to: string };
+    console.log(`[email] job=${job.id} type=${type} to=${to}`);
+
+    if (!type || !to) {
+      throw new Error('email job missing required fields: type, to');
+    }
+
+    switch (type) {
+      case 'order-confirmation': {
+        const {
+          orderNumber,
+          customerName,
+          items,
+          subtotal,
+          shipping,
+          total,
+          shippingAddress,
+        } = job.data as {
+          orderNumber: string;
+          customerName: string;
+          items: { name: string; quantity: number; unitPrice: string; totalPrice: string }[];
+          subtotal: string;
+          shipping: string;
+          total: string;
+          shippingAddress: string;
+        };
+
+        const html = await render(
+          OrderConfirmationEmail({
+            orderNumber,
+            customerName,
+            items,
+            subtotal,
+            shipping,
+            total,
+            shippingAddress,
+          }),
+        );
+
+        await resend.emails.send({
+          from: EMAIL_FROM,
+          to,
+          subject: `Bestellbestätigung ${orderNumber} – Vee Handmade`,
+          html,
+        });
+        break;
+      }
+
+      case 'shipping-notification': {
+        const { orderNumber, customerName, trackingNumber, trackingUrl, carrierName, estimatedDelivery } =
+          job.data as {
+            orderNumber: string;
+            customerName: string;
+            trackingNumber: string;
+            trackingUrl: string;
+            carrierName: string;
+            estimatedDelivery?: string;
+          };
+
+        const html = await render(
+          ShippingNotificationEmail({
+            orderNumber,
+            customerName,
+            trackingNumber,
+            trackingUrl,
+            carrierName,
+            estimatedDelivery,
+          }),
+        );
+
+        await resend.emails.send({
+          from: EMAIL_FROM,
+          to,
+          subject: `Deine Bestellung ${orderNumber} ist unterwegs! – Vee Handmade`,
+          html,
+        });
+        break;
+      }
+
+      case 'download-ready': {
+        const { customerName, productName, downloadUrl, expiresAt, downloadLimit, downloadsUsed } =
+          job.data as {
+            customerName: string;
+            productName: string;
+            downloadUrl: string;
+            expiresAt?: string;
+            downloadLimit?: number;
+            downloadsUsed?: number;
+          };
+
+        const html = await render(
+          DownloadReadyEmail({
+            customerName,
+            productName,
+            downloadUrl,
+            expiresAt,
+            downloadLimit,
+            downloadsUsed,
+          }),
+        );
+
+        await resend.emails.send({
+          from: EMAIL_FROM,
+          to,
+          subject: `Dein Download ist bereit: ${productName} – Vee Handmade`,
+          html,
+        });
+        break;
+      }
+
+      case 'abandoned-cart': {
+        const { customerName, cartUrl, items, total, unsubscribeUrl } = job.data as {
+          customerName: string;
+          cartUrl: string;
+          items: { name: string; quantity: number; price: string; imageUrl?: string; variantName?: string }[];
+          total?: string;
+          unsubscribeUrl: string;
+        };
+
+        const html = await render(
+          AbandonedCartEmail({
+            customerName,
+            cartUrl,
+            items,
+            total,
+            unsubscribeUrl,
+          }),
+        );
+
+        await resend.emails.send({
+          from: EMAIL_FROM,
+          to,
+          subject: 'Hast du etwas vergessen? Dein Warenkorb wartet! – Vee Handmade',
+          html,
+        });
+        break;
+      }
+
+      case 'contact-form': {
+        const { senderName, senderEmail, message } = job.data as {
+          senderName: string;
+          senderEmail: string;
+          message: string;
+        };
+
+        await resend.emails.send({
+          from: EMAIL_FROM,
+          to,
+          replyTo: senderEmail,
+          subject: `Neue Kontaktanfrage von ${senderName}`,
+          html: `
+            <p><strong>Von:</strong> ${senderName} (${senderEmail})</p>
+            <p><strong>Nachricht:</strong></p>
+            <p>${message.replace(/\n/g, '<br>')}</p>
+          `,
+        });
+        break;
+      }
+
+      default:
+        throw new Error(`Unknown email type: "${type}"`);
+    }
+
+    console.log(`[email] job=${job.id} type=${type} sent`);
   },
   {
     connection,
@@ -60,12 +259,20 @@ const emailWorker = new Worker(
   },
 );
 
-// Reconciliation Worker
+// ─── Reconciliation Worker ────────────────────────────────────────────────────
+// Job data: { marketplaceId: string }
 const reconciliationWorker = new Worker(
   'reconciliation',
   async (job) => {
-    console.log(`[reconciliation] Processing job ${job.id}`, job.data);
-    // TODO: Implement full reconciliation
+    const { marketplaceId } = job.data as { marketplaceId: string };
+    console.log(`[reconciliation] job=${job.id} marketplaceId=${marketplaceId}`);
+
+    if (!marketplaceId) {
+      throw new Error('reconciliation job missing marketplaceId');
+    }
+
+    await channelSyncService.reconcile(marketplaceId);
+    console.log(`[reconciliation] job=${job.id} completed`);
   },
   {
     connection,
@@ -73,12 +280,95 @@ const reconciliationWorker = new Worker(
   },
 );
 
-// Abandoned Cart Worker
+// ─── Abandoned Cart Worker ────────────────────────────────────────────────────
+// Job data: {} (scans DB for stale carts)
 const abandonedCartWorker = new Worker(
   'abandoned-cart',
   async (job) => {
-    console.log(`[abandoned-cart] Processing job ${job.id}`, job.data);
-    // TODO: Implement abandoned cart email sequence
+    console.log(`[abandoned-cart] job=${job.id} scanning for stale carts`);
+
+    // Find carts that have been idle for more than 2 hours and have items
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+
+    const staleCarts = await db.cart.findMany({
+      where: {
+        updatedAt: { lte: twoHoursAgo },
+        customerId: { not: null },
+        items: { some: {} },
+      },
+      include: {
+        customer: {
+          select: { id: true, email: true, firstName: true, lastName: true, marketingConsent: true },
+        },
+        items: {
+          include: {
+            product: { select: { name: true, basePrice: true } },
+            variant: { select: { name: true, price: true } },
+          },
+        },
+      },
+      take: 100,
+    });
+
+    let sent = 0;
+
+    for (const cart of staleCarts) {
+      // Only send to customers who have consented to marketing emails
+      if (!cart.customer?.email || !cart.customer.marketingConsent) continue;
+
+      const customerName =
+        cart.customer.firstName
+          ? `${cart.customer.firstName} ${cart.customer.lastName ?? ''}`.trim()
+          : 'Kunde';
+
+      const cartItems = cart.items.map((item) => {
+        const unitPrice = item.variant?.price
+          ? Number(item.variant.price)
+          : Number(item.product.basePrice);
+        return {
+          name: item.product.name,
+          quantity: item.quantity,
+          price: `${(unitPrice * item.quantity).toFixed(2).replace('.', ',')} EUR`,
+          variantName: item.variant?.name ?? undefined,
+        };
+      });
+
+      const cartTotal = cart.items.reduce((sum, item) => {
+        const unitPrice = item.variant?.price
+          ? Number(item.variant.price)
+          : Number(item.product.basePrice);
+        return sum + unitPrice * item.quantity;
+      }, 0);
+
+      const html = await render(
+        AbandonedCartEmail({
+          customerName,
+          cartUrl: `${STORE_URL}/cart`,
+          items: cartItems,
+          total: `${cartTotal.toFixed(2).replace('.', ',')} EUR`,
+          unsubscribeUrl: `${STORE_URL}/newsletter/unsubscribe`,
+        }),
+      );
+
+      try {
+        await resend.emails.send({
+          from: EMAIL_FROM,
+          to: cart.customer.email,
+          subject: 'Hast du etwas vergessen? Dein Warenkorb wartet! – Vee Handmade',
+          html,
+        });
+        sent++;
+      } catch (err) {
+        console.error(
+          `[abandoned-cart] Failed to send reminder to ${cart.customer.email}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
+    console.log(
+      `[abandoned-cart] job=${job.id} processed ${staleCarts.length} stale carts, sent ${sent} reminders`,
+    );
   },
   {
     connection,
@@ -86,7 +376,7 @@ const abandonedCartWorker = new Worker(
   },
 );
 
-// Graceful shutdown
+// ─── Graceful shutdown ────────────────────────────────────────────────────────
 const workers = [
   syncInventoryWorker,
   importOrdersWorker,
@@ -105,5 +395,12 @@ async function shutdown() {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+// Worker error logging
+for (const worker of workers) {
+  worker.on('failed', (job, err) => {
+    console.error(`[${worker.name}] job=${job?.id} FAILED:`, err.message);
+  });
+}
 
 console.log('All workers started successfully.');
