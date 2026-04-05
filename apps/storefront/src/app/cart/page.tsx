@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Button } from '@vee/ui';
 import { useCartStore } from '@/stores/cart';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { useTranslation } from '@/hooks/use-translation';
 
 const formatEUR = (cents: number) =>
   new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents);
@@ -24,6 +25,7 @@ export default function CartPage() {
     removeCoupon,
   } = useCartStore();
 
+  const { t } = useTranslation();
   const [couponInput, setCouponInput] = useState('');
   const [couponError, setCouponError] = useState('');
   const [hydrated, setHydrated] = useState(false);
@@ -40,7 +42,7 @@ export default function CartPage() {
       await applyCoupon(couponInput.trim().toUpperCase());
       setCouponInput('');
     } catch {
-      setCouponError('Ungültiger oder abgelaufener Gutschein-Code.');
+      setCouponError(t('cart.couponInvalid'));
     }
   }
 
@@ -59,16 +61,16 @@ export default function CartPage() {
   if (!hydrated) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-16 text-center">
-        <p className="text-muted-foreground">Warenkorb wird geladen…</p>
+        <p className="text-muted-foreground">{t('cart.loading')}</p>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <Breadcrumbs items={[{ label: 'Warenkorb' }]} />
+      <Breadcrumbs items={[{ label: t('cart.title') }]} />
 
-      <h1 className="mb-8 text-3xl font-bold text-foreground">Warenkorb</h1>
+      <h1 className="mb-8 text-3xl font-bold text-foreground">{t('cart.title')}</h1>
 
       {items.length === 0 ? (
         <EmptyCart />
@@ -98,7 +100,7 @@ export default function CartPage() {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                   />
                 </svg>
-                Aktualisierung…
+                {t('cart.updating')}
               </div>
             )}
 
@@ -224,26 +226,28 @@ export default function CartPage() {
           {/* Order summary */}
           <div className="lg:col-span-1">
             <div className="sticky top-24 rounded-lg border border-border bg-background p-6 space-y-5">
-              <h2 className="text-lg font-bold text-foreground">Bestellübersicht</h2>
+              <h2 className="text-lg font-bold text-foreground">{t('cart.orderSummary')}</h2>
 
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Zwischensumme</span>
+                  <span>{t('cart.subtotal')}</span>
                   <span>{formatEUR(subtotal)}</span>
                 </div>
 
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-accent">
-                    <span>Rabatt {couponCode && `(${couponCode})`}</span>
+                    <span>
+                      {t('cart.discount')} {couponCode && `(${couponCode})`}
+                    </span>
                     <span>−{formatEUR(discountAmount)}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Versand</span>
+                  <span>{t('cart.shipping')}</span>
                   <span>
                     {shipping === 0 ? (
-                      <span className="text-accent font-medium">Kostenlos</span>
+                      <span className="text-accent font-medium">{t('cart.freeShipping')}</span>
                     ) : (
                       formatEUR(shipping)
                     )}
@@ -252,19 +256,15 @@ export default function CartPage() {
 
                 {subtotal < 50 && (
                   <p className="rounded bg-secondary px-3 py-2 text-xs text-muted-foreground">
-                    Noch{' '}
-                    <span className="font-semibold text-foreground">
-                      {formatEUR(50 - subtotal)}
-                    </span>{' '}
-                    bis zum kostenlosen Versand!
+                    {t('cart.freeShippingProgress', { amount: formatEUR(50 - subtotal) })}
                   </p>
                 )}
 
                 <div className="border-t border-border pt-3 flex justify-between font-bold text-foreground">
-                  <span>Gesamt</span>
+                  <span>{t('cart.total')}</span>
                   <span>{formatEUR(total)}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">inkl. MwSt.</p>
+                <p className="text-xs text-muted-foreground">{t('cart.taxIncluded')}</p>
               </div>
 
               {/* Coupon code */}
@@ -272,19 +272,19 @@ export default function CartPage() {
                 {couponCode ? (
                   <div className="flex items-center justify-between rounded-md bg-accent/10 px-3 py-2">
                     <span className="text-sm font-medium text-accent-foreground">
-                      Gutschein: {couponCode}
+                      {t('cart.couponLabel', { code: couponCode })}
                     </span>
                     <button
                       onClick={handleRemoveCoupon}
                       className="text-xs text-muted-foreground hover:text-destructive transition-colors"
                     >
-                      Entfernen
+                      {t('cart.couponRemove')}
                     </button>
                   </div>
                 ) : (
                   <div>
                     <label htmlFor="coupon" className="mb-1.5 block text-sm font-medium text-foreground">
-                      Gutschein-Code
+                      {t('cart.couponCode')}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -293,7 +293,7 @@ export default function CartPage() {
                         value={couponInput}
                         onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                         onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
-                        placeholder="CODE eingeben"
+                        placeholder={t('cart.couponPlaceholder')}
                         className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                       <Button
@@ -302,7 +302,7 @@ export default function CartPage() {
                         onClick={handleApplyCoupon}
                         disabled={!couponInput.trim() || isLoading}
                       >
-                        Anwenden
+                        {t('cart.couponApply')}
                       </Button>
                     </div>
                     {couponError && (
@@ -317,14 +317,14 @@ export default function CartPage() {
                 href="/checkout"
                 className="block w-full rounded-md bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
               >
-                Zur Kasse →
+                {t('cart.checkout')} →
               </Link>
 
               <Link
                 href="/shop"
                 className="block text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                Weiter einkaufen
+                {t('cart.continueShopping')}
               </Link>
             </div>
           </div>
@@ -335,6 +335,8 @@ export default function CartPage() {
 }
 
 function EmptyCart() {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <svg
@@ -354,15 +356,13 @@ function EmptyCart() {
         <line x1="3" x2="21" y1="6" y2="6" />
         <path d="M16 10a4 4 0 0 1-8 0" />
       </svg>
-      <h2 className="text-2xl font-bold text-foreground">Dein Warenkorb ist leer</h2>
-      <p className="mt-3 max-w-sm text-muted-foreground">
-        Entdecke unsere handgefertigten Produkte und füge deine Favoriten hinzu.
-      </p>
+      <h2 className="text-2xl font-bold text-foreground">{t('cart.empty')}</h2>
+      <p className="mt-3 max-w-sm text-muted-foreground">{t('cart.emptyMessage')}</p>
       <Link
         href="/shop"
         className="mt-8 rounded-md bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
       >
-        Shop entdecken
+        {t('cart.shopNow')}
       </Link>
     </div>
   );

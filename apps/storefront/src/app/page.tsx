@@ -1,6 +1,9 @@
 import Link from 'next/link';
+import { getTranslations } from '@/lib/i18n';
 
-export default function HomePage() {
+export default async function HomePage() {
+  const t = await getTranslations();
+
   return (
     <>
       {/* Hero Section */}
@@ -8,28 +11,26 @@ export default function HomePage() {
         <h1 className="text-5xl font-bold tracking-tight text-foreground md:text-7xl">
           Vee Handmade
         </h1>
-        <p className="mt-4 max-w-xl text-lg text-muted-foreground">
-          Einzigartige handgefertigte Produkte — mit Liebe gemacht.
-        </p>
+        <p className="mt-4 max-w-xl text-lg text-muted-foreground">{t('home.heroSubtitle')}</p>
         <div className="mt-8 flex gap-4">
           <Link
             href="/shop"
             className="rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
-            Shop entdecken
+            {t('home.discoverShop')}
           </Link>
           <Link
             href="/about"
             className="rounded-md border border-border px-6 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
           >
-            Unsere Geschichte
+            {t('home.ourStory')}
           </Link>
         </div>
       </section>
 
       {/* Featured Categories */}
       <section className="mx-auto max-w-7xl px-4 py-16">
-        <h2 className="text-center text-3xl font-bold text-foreground">Kategorien</h2>
+        <h2 className="text-center text-3xl font-bold text-foreground">{t('home.categories')}</h2>
         <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {['Jewelry', 'Home Decor', 'Accessories'].map((category) => (
             <Link
@@ -49,22 +50,16 @@ export default function HomePage() {
       <section className="bg-secondary px-4 py-16">
         <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 md:grid-cols-3">
           <div className="text-center">
-            <h3 className="text-lg font-semibold">Handgemacht</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Jedes Stück wird sorgfältig von Hand gefertigt.
-            </p>
+            <h3 className="text-lg font-semibold">{t('home.handmade')}</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{t('home.handmadeText')}</p>
           </div>
           <div className="text-center">
-            <h3 className="text-lg font-semibold">Einzigartig</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Personalisierte Produkte nach Ihren Wünschen.
-            </p>
+            <h3 className="text-lg font-semibold">{t('home.unique')}</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{t('home.uniqueText')}</p>
           </div>
           <div className="text-center">
-            <h3 className="text-lg font-semibold">Nachhaltig</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Hergestellt mit hochwertigen, nachhaltigen Materialien.
-            </p>
+            <h3 className="text-lg font-semibold">{t('home.sustainable')}</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{t('home.sustainableText')}</p>
           </div>
         </div>
       </section>

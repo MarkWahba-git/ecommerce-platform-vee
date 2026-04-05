@@ -4,16 +4,19 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { cn } from '@vee/ui';
 import { useCartStore } from '@/stores/cart';
-
-const navLinks = [
-  { href: '/shop', label: 'Shop' },
-  { href: '/about', label: 'Über uns' },
-  { href: '/blog', label: 'Blog' },
-];
+import { useTranslation } from '@/hooks/use-translation';
+import { LocaleSwitcher } from './LocaleSwitcher';
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const itemCount = useCartStore((s) => s.items.reduce((acc, i) => acc + i.quantity, 0));
+  const { t } = useTranslation();
+
+  const navLinks = [
+    { href: '/shop', label: t('nav.shop') },
+    { href: '/about', label: t('nav.about') },
+    { href: '/blog', label: t('nav.blog') },
+  ];
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -38,10 +41,15 @@ export function Header() {
 
         {/* Actions */}
         <div className="flex items-center gap-4">
+          {/* Locale Switcher */}
+          <div className="hidden md:block">
+            <LocaleSwitcher />
+          </div>
+
           {/* Search */}
           <Link
             href="/shop?search=true"
-            aria-label="Suche"
+            aria-label={t('nav.searchLabel')}
             className="hidden text-muted-foreground transition-colors hover:text-foreground md:block"
           >
             <svg
@@ -63,7 +71,7 @@ export function Header() {
           {/* Account */}
           <Link
             href="/account"
-            aria-label="Konto"
+            aria-label={t('nav.accountLabel')}
             className="hidden text-muted-foreground transition-colors hover:text-foreground md:block"
           >
             <svg
@@ -85,7 +93,7 @@ export function Header() {
           {/* Cart */}
           <Link
             href="/cart"
-            aria-label={`Warenkorb (${itemCount} Artikel)`}
+            aria-label={t('nav.cartLabel', { count: String(itemCount) })}
             className="relative text-muted-foreground transition-colors hover:text-foreground"
           >
             <svg
@@ -114,7 +122,7 @@ export function Header() {
           <button
             className="ml-2 text-muted-foreground transition-colors hover:text-foreground md:hidden"
             onClick={() => setMobileOpen((prev) => !prev)}
-            aria-label="Menü öffnen"
+            aria-label={t('nav.openMenu')}
             aria-expanded={mobileOpen}
           >
             {mobileOpen ? (
@@ -175,15 +183,18 @@ export function Header() {
             onClick={() => setMobileOpen(false)}
             className="border-b border-border py-3 text-sm font-medium text-foreground transition-colors hover:text-accent"
           >
-            Mein Konto
+            {t('common.account')}
           </Link>
           <Link
             href="/shop"
             onClick={() => setMobileOpen(false)}
-            className="py-3 text-sm font-medium text-foreground transition-colors hover:text-accent"
+            className="border-b border-border py-3 text-sm font-medium text-foreground transition-colors hover:text-accent"
           >
-            Suche
+            {t('common.search')}
           </Link>
+          <div className="py-3">
+            <LocaleSwitcher />
+          </div>
         </nav>
       </div>
     </header>

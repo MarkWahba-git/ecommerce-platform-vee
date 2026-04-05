@@ -1,21 +1,24 @@
 import Link from 'next/link';
+import { getTranslations } from '@/lib/i18n';
 
-const shopLinks = [
-  { href: '/shop', label: 'Alle Produkte' },
-  { href: '/shop/schmuck', label: 'Schmuck' },
-  { href: '/shop/wohnaccessoires', label: 'Wohnaccessoires' },
-  { href: '/shop/personalisiert', label: 'Personalisiert' },
-  { href: '/shop/digital', label: 'Digitale Produkte' },
-];
+export async function Footer() {
+  const t = await getTranslations();
 
-const legalLinks = [
-  { href: '/legal/impressum', label: 'Impressum' },
-  { href: '/legal/datenschutz', label: 'Datenschutz' },
-  { href: '/legal/agb', label: 'AGB' },
-  { href: '/legal/widerruf', label: 'Widerrufsbelehrung' },
-];
+  const shopLinks = [
+    { href: '/shop', label: t('footer.shopAll') },
+    { href: '/shop/schmuck', label: t('footer.shopJewelry') },
+    { href: '/shop/wohnaccessoires', label: t('footer.shopHome') },
+    { href: '/shop/personalisiert', label: t('footer.shopPersonalized') },
+    { href: '/shop/digital', label: t('footer.shopDigital') },
+  ];
 
-export function Footer() {
+  const legalLinks = [
+    { href: '/legal/impressum', label: t('footer.impressum') },
+    { href: '/legal/datenschutz', label: t('footer.datenschutz') },
+    { href: '/legal/agb', label: t('footer.agb') },
+    { href: '/legal/widerruf', label: t('footer.widerruf') },
+  ];
+
   return (
     <footer className="border-t border-border bg-secondary">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
@@ -26,8 +29,7 @@ export function Footer() {
               Vee
             </Link>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Handgefertigte Unikate mit Liebe gemacht — für Menschen, die das Besondere
-              schätzen.
+              {t('footer.tagline')}
             </p>
             <div className="mt-5 flex gap-3">
               <a
@@ -104,7 +106,7 @@ export function Footer() {
           {/* Shop Links */}
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
-              Shop
+              {t('common.shop')}
             </h3>
             <ul className="space-y-2">
               {shopLinks.map((link) => (
@@ -123,7 +125,7 @@ export function Footer() {
           {/* Legal Links */}
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
-              Rechtliches
+              {t('footer.legal')}
             </h3>
             <ul className="space-y-2">
               {legalLinks.map((link) => (
@@ -142,46 +144,39 @@ export function Footer() {
           {/* Newsletter */}
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
-              Newsletter
+              {t('footer.newsletter')}
             </h3>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Neue Produkte, Inspirationen und exklusive Angebote direkt in dein Postfach.
-            </p>
+            <p className="mb-4 text-sm text-muted-foreground">{t('footer.newsletterText')}</p>
             <form
               action="/api/newsletter"
               method="post"
               className="flex flex-col gap-2 sm:flex-row"
             >
               <label htmlFor="footer-email" className="sr-only">
-                E-Mail-Adresse
+                {t('field.email')}
               </label>
               <input
                 id="footer-email"
                 type="email"
                 name="email"
                 required
-                placeholder="deine@email.de"
+                placeholder={t('footer.newsletterPlaceholder')}
                 className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
               />
               <button
                 type="submit"
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
               >
-                Anmelden
+                {t('footer.subscribe')}
               </button>
             </form>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Kein Spam. Abmeldung jederzeit möglich.
-            </p>
+            <p className="mt-2 text-xs text-muted-foreground">{t('footer.newsletterSubtext')}</p>
           </div>
         </div>
 
         {/* Copyright */}
         <div className="mt-10 border-t border-border pt-6 text-center text-xs text-muted-foreground">
-          <p>
-            &copy; {new Date().getFullYear()} Vee Handmade. Alle Rechte vorbehalten. Hergestellt
-            mit Liebe in Deutschland.
-          </p>
+          <p>{t('footer.copyright', { year: String(new Date().getFullYear()) })}</p>
         </div>
       </div>
     </footer>
