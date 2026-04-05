@@ -1,0 +1,864 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== AUTH & USERS =====================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String?
+  role          UserRole  @default(VIEWER)
+  emailVerified DateTime?
+  image         String?
+  active        Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts  Account[]
+  sessions  Session[]
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// ===================== CUSTOMERS =====================
+
+model Customer {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String?
+  firstName         String?
+  lastName          String?
+  phone             String?
+  emailVerified     DateTime?
+  marketingConsent  Boolean   @default(false)
+  consentDate       DateTime?
+  gdprDataRequest   DateTime?
+  gdprDeleteRequest DateTime?
+  notes             String?   @db.Text
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  addresses           Address[]
+  orders              Order[]
+  carts               Cart[]
+  reviews             Review[]
+  wishlists           Wishlist[]
+  downloadAccess      DownloadAccess[]
+  customOrderRequests CustomOrderRequest[]
+
+  @@map("customers")
+}
+
+enum AddressType {
+  SHIPPING
+  BILLING
+  BOTH
+}
+
+model Address {
+  id         String      @id @default(cuid())
+  customerId String
+  type       AddressType @default(SHIPPING)
+  isDefault  Boolean     @default(false)
+  firstName  String
+  lastName   String
+  company    String?
+  street1    String
+  street2    String?
+  city       String
+  state      String?
+  postalCode String
+  country    String      @default("DE")
+  phone      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  shippingOrders Order[]  @relation("ShippingAddress")
+  billingOrders  Order[]  @relation("BillingAddress")
+
+  @@map("addresses")
+}
+
+// ===================== PRODUCTS =====================
+
+enum ProductType {
+  PHYSICAL
+  DIGITAL
+  PERSONALIZED
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model Product {
+  id               String        @id @default(cuid())
+  type             ProductType
+  status           ProductStatus @default(DRAFT)
+  slug             String        @unique
+  sku              String        @unique
+  name             String
+  shortDescription String?       @db.Text
+  description      String        @db.Text
+  descriptionHtml  String?       @db.Text
+  basePrice        Decimal       @db.Decimal(10, 2)
+  compareAtPrice   Decimal?      @db.Decimal(10, 2)
+  costPrice        Decimal?      @db.Decimal(10, 2)
+  taxRate          Decimal       @default(0.19) @db.Decimal(5, 4)
+  weight           Decimal?      @db.Decimal(8, 2)
+  width            Decimal?      @db.Decimal(8, 2)
+  height           Decimal?      @db.Decimal(8, 2)
+  length           Decimal?      @db.Decimal(8, 2)
+  isFeatured       Boolean       @default(false)
+  isMadeToOrder    Boolean       @default(false)
+  productionDays   Int?
+  sortOrder        Int           @default(0)
+  attributes       Json?
+  metadata         Json?
+
+  // Digital product fields
+  isInstantDelivery  Boolean @default(false)
+  maxDownloads       Int?
+  downloadExpiryDays Int?
+  licenseType        String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+
+  variants              ProductVariant[]
+  images                ProductImage[]
+  files                 ProductFile[]
+  categories            CategoriesOnProducts[]
+  tags                  TagsOnProducts[]
+  personalizationFields ProductPersonalizationField[]
+  marketplaceListings   MarketplaceListing[]
+  reviews               Review[]
+  relatedFrom           RelatedProducts[]             @relation("RelatedFrom")
+  relatedTo             RelatedProducts[]             @relation("RelatedTo")
+  seoMeta               SeoMeta?
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  wishlists             Wishlist[]
+
+  @@index([status, type])
+  @@index([slug])
+  @@index([sku])
+  @@map("products")
+}
+
+model ProductVariant {
+  id        String   @id @default(cuid())
+  productId String
+  sku       String   @unique
+  name      String
+  price     Decimal? @db.Decimal(10, 2)
+  costPrice Decimal? @db.Decimal(10, 2)
+  weight    Decimal? @db.Decimal(8, 2)
+  options   Json
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product             Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventory           Inventory?
+  cartItems           CartItem[]
+  orderItems          OrderItem[]
+  marketplaceListings MarketplaceListing[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  url       String
+  altText   String?
+  width     Int?
+  height    Int?
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model ProductFile {
+  id        String   @id @default(cuid())
+  productId String
+  fileName  String
+  fileKey   String
+  fileSize  Int
+  mimeType  String
+  version   Int      @default(1)
+  isPreview Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_files")
+}
+
+enum PersonalizationFieldType {
+  TEXT
+  TEXTAREA
+  SELECT
+  FILE_UPLOAD
+  COLOR_PICKER
+  NUMBER
+}
+
+model ProductPersonalizationField {
+  id             String                   @id @default(cuid())
+  productId      String
+  fieldName      String
+  label          String
+  type           PersonalizationFieldType
+  required       Boolean                  @default(false)
+  options        Json?
+  maxLength      Int?
+  priceSurcharge Decimal?                 @db.Decimal(10, 2)
+  sortOrder      Int                      @default(0)
+  createdAt      DateTime                 @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_personalization_fields")
+}
+
+// ===================== CATEGORIES & TAGS =====================
+
+model Category {
+  id          String   @id @default(cuid())
+  parentId    String?
+  slug        String   @unique
+  name        String
+  description String?  @db.Text
+  imageUrl    String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent   Category?              @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[]             @relation("CategoryTree")
+  products CategoriesOnProducts[]
+  seoMeta  SeoMeta?
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model CategoriesOnProducts {
+  productId  String
+  categoryId String
+  sortOrder  Int      @default(0)
+  assignedAt DateTime @default(now())
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+  @@map("categories_on_products")
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  products TagsOnProducts[]
+
+  @@map("tags")
+}
+
+model TagsOnProducts {
+  productId String
+  tagId     String
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([productId, tagId])
+  @@map("tags_on_products")
+}
+
+model RelatedProducts {
+  productId        String
+  relatedProductId String
+  type             String @default("related")
+  sortOrder        Int    @default(0)
+
+  product        Product @relation("RelatedFrom", fields: [productId], references: [id], onDelete: Cascade)
+  relatedProduct Product @relation("RelatedTo", fields: [relatedProductId], references: [id], onDelete: Cascade)
+
+  @@id([productId, relatedProductId])
+  @@map("related_products")
+}
+
+// ===================== INVENTORY =====================
+
+model Inventory {
+  id                String   @id @default(cuid())
+  variantId         String   @unique
+  quantity          Int      @default(0)
+  reservedQuantity  Int      @default(0)
+  lowStockThreshold Int      @default(5)
+  trackInventory    Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@map("inventories")
+}
+
+// ===================== CART =====================
+
+model Cart {
+  id         String    @id @default(cuid())
+  customerId String?
+  sessionId  String?
+  currency   String    @default("EUR")
+  couponCode String?
+  metadata   Json?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  customer Customer? @relation(fields: [customerId], references: [id])
+  items    CartItem[]
+  coupon   Coupon?   @relation(fields: [couponCode], references: [code])
+
+  @@index([customerId])
+  @@index([sessionId])
+  @@map("carts")
+}
+
+model CartItem {
+  id              String   @id @default(cuid())
+  cartId          String
+  productId       String
+  variantId       String?
+  quantity        Int      @default(1)
+  personalization Json?
+  unitPrice       Decimal  @db.Decimal(10, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cart    Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+// ===================== ORDERS =====================
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  AWAITING_APPROVAL
+  SHIPPED
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum OrderSource {
+  WEBSITE
+  ETSY
+  AMAZON
+  MANUAL
+}
+
+model Order {
+  id                 String      @id @default(cuid())
+  orderNumber        String      @unique
+  customerId         String?
+  source             OrderSource @default(WEBSITE)
+  status             OrderStatus @default(PENDING)
+  currency           String      @default("EUR")
+  subtotal           Decimal     @db.Decimal(10, 2)
+  shippingCost       Decimal     @db.Decimal(10, 2) @default(0)
+  taxAmount          Decimal     @db.Decimal(10, 2) @default(0)
+  discountAmount     Decimal     @db.Decimal(10, 2) @default(0)
+  total              Decimal     @db.Decimal(10, 2)
+  couponCode         String?
+  shippingAddressId  String?
+  billingAddressId   String?
+  customerNote       String?     @db.Text
+  internalNote       String?     @db.Text
+  metadata           Json?
+  marketplaceId      String?
+  marketplaceOrderId String?
+  paidAt             DateTime?
+  shippedAt          DateTime?
+  deliveredAt        DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  customer        Customer?    @relation(fields: [customerId], references: [id])
+  shippingAddress Address?     @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress  Address?     @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  marketplace     Marketplace? @relation(fields: [marketplaceId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  refunds         Refund[]
+  shipments       Shipment[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([source])
+  @@index([marketplaceOrderId])
+  @@index([orderNumber])
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String   @id @default(cuid())
+  orderId         String
+  productId       String
+  variantId       String?
+  sku             String
+  name            String
+  quantity        Int
+  unitPrice       Decimal  @db.Decimal(10, 2)
+  totalPrice      Decimal  @db.Decimal(10, 2)
+  taxRate         Decimal  @db.Decimal(5, 4)
+  personalization Json?
+  isDigital       Boolean  @default(false)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  order          Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product          @relation(fields: [productId], references: [id])
+  variant        ProductVariant?  @relation(fields: [variantId], references: [id])
+  downloadAccess DownloadAccess[]
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+// ===================== PAYMENTS & REFUNDS =====================
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  orderId           String
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("EUR")
+  status            PaymentStatus @default(PENDING)
+  provider          String        @default("stripe")
+  providerPaymentId String?
+  providerData      Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([providerPaymentId])
+  @@map("payments")
+}
+
+model Refund {
+  id               String   @id @default(cuid())
+  orderId          String
+  amount           Decimal  @db.Decimal(10, 2)
+  reason           String?  @db.Text
+  providerRefundId String?
+  status           String   @default("pending")
+  createdAt        DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@map("refunds")
+}
+
+// ===================== SHIPPING =====================
+
+model Shipment {
+  id             String    @id @default(cuid())
+  orderId        String
+  carrier        String
+  trackingNumber String?
+  trackingUrl    String?
+  status         String    @default("pending")
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  labelUrl       String?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@map("shipments")
+}
+
+// ===================== DIGITAL DELIVERY =====================
+
+model DownloadAccess {
+  id             String    @id @default(cuid())
+  customerId     String
+  orderItemId    String
+  fileKey        String
+  fileName       String
+  downloadCount  Int       @default(0)
+  maxDownloads   Int?
+  expiresAt      DateTime?
+  lastDownloadAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  customer  Customer  @relation(fields: [customerId], references: [id])
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
+
+  @@index([customerId])
+  @@index([orderItemId])
+  @@map("download_access")
+}
+
+// ===================== CUSTOM ORDER REQUESTS =====================
+
+enum CustomOrderStatus {
+  SUBMITTED
+  REVIEWING
+  QUOTED
+  ACCEPTED
+  IN_PRODUCTION
+  PROOF_SENT
+  APPROVED
+  COMPLETED
+  DECLINED
+  CANCELLED
+}
+
+model CustomOrderRequest {
+  id           String            @id @default(cuid())
+  customerId   String
+  status       CustomOrderStatus @default(SUBMITTED)
+  description  String            @db.Text
+  attachments  Json?
+  quotedPrice  Decimal?          @db.Decimal(10, 2)
+  quotedDays   Int?
+  adminNotes   String?           @db.Text
+  proofFileKey String?
+  orderId      String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([status])
+  @@map("custom_order_requests")
+}
+
+// ===================== MARKETPLACES =====================
+
+enum MarketplaceType {
+  ETSY
+  AMAZON
+  EBAY
+  CUSTOM
+}
+
+model Marketplace {
+  id          String          @id @default(cuid())
+  type        MarketplaceType
+  name        String
+  isActive    Boolean         @default(true)
+  credentials Json
+  settings    Json?
+  lastSyncAt  DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  listings MarketplaceListing[]
+  orders   Order[]
+  syncJobs SyncJob[]
+
+  @@map("marketplaces")
+}
+
+model MarketplaceListing {
+  id                 String   @id @default(cuid())
+  marketplaceId      String
+  productId          String
+  variantId          String?
+  externalListingId  String?
+  externalUrl        String?
+  status             String   @default("pending")
+  channelPrice       Decimal? @db.Decimal(10, 2)
+  channelTitle       String?
+  channelDescription String?  @db.Text
+  channelData        Json?
+  lastSyncedAt       DateTime?
+  syncError          String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  marketplace Marketplace     @relation(fields: [marketplaceId], references: [id])
+  product     Product         @relation(fields: [productId], references: [id])
+  variant     ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@unique([marketplaceId, productId, variantId])
+  @@index([externalListingId])
+  @@map("marketplace_listings")
+}
+
+// ===================== SYNC JOBS =====================
+
+enum SyncJobType {
+  PRODUCT_PUSH
+  INVENTORY_SYNC
+  PRICE_SYNC
+  ORDER_IMPORT
+  FULFILLMENT_PUSH
+  FULL_RECONCILIATION
+}
+
+enum SyncJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  PARTIAL
+}
+
+model SyncJob {
+  id             String        @id @default(cuid())
+  marketplaceId  String
+  type           SyncJobType
+  status         SyncJobStatus @default(QUEUED)
+  direction      String        @default("push")
+  itemsProcessed Int           @default(0)
+  itemsFailed    Int           @default(0)
+  itemsTotal     Int?
+  errorLog       Json?
+  idempotencyKey String?       @unique
+  retryCount     Int           @default(0)
+  maxRetries     Int           @default(3)
+  scheduledAt    DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime      @default(now())
+
+  marketplace Marketplace @relation(fields: [marketplaceId], references: [id])
+
+  @@index([marketplaceId, type])
+  @@index([status])
+  @@index([idempotencyKey])
+  @@map("sync_jobs")
+}
+
+// ===================== COUPONS =====================
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_SHIPPING
+  BUY_X_GET_Y
+}
+
+model Coupon {
+  id                String       @id @default(cuid())
+  code              String       @unique
+  type              DiscountType
+  value             Decimal      @db.Decimal(10, 2)
+  minOrderAmount    Decimal?     @db.Decimal(10, 2)
+  maxDiscountAmount Decimal?     @db.Decimal(10, 2)
+  usageLimit        Int?
+  usageCount        Int          @default(0)
+  perCustomerLimit  Int?         @default(1)
+  applicableTo      Json?
+  startsAt          DateTime?
+  expiresAt         DateTime?
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  carts Cart[]
+
+  @@map("coupons")
+}
+
+// ===================== REVIEWS =====================
+
+model Review {
+  id         String   @id @default(cuid())
+  productId  String
+  customerId String
+  rating     Int
+  title      String?
+  body       String?  @db.Text
+  isVerified Boolean  @default(false)
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@unique([productId, customerId])
+  @@index([productId, isApproved])
+  @@map("reviews")
+}
+
+// ===================== WISHLIST =====================
+
+model Wishlist {
+  id         String   @id @default(cuid())
+  customerId String
+  productId  String
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, productId])
+  @@map("wishlists")
+}
+
+// ===================== BLOG / CONTENT =====================
+
+model BlogPost {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  excerpt     String?   @db.Text
+  content     String    @db.Text
+  coverImage  String?
+  authorName  String?
+  status      String    @default("draft")
+  publishedAt DateTime?
+  tags        String[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  seoMeta SeoMeta?
+
+  @@index([status, publishedAt])
+  @@map("blog_posts")
+}
+
+// ===================== SEO =====================
+
+model SeoMeta {
+  id              String  @id @default(cuid())
+  productId       String? @unique
+  categoryId      String? @unique
+  blogPostId      String? @unique
+  pageSlug        String? @unique
+  metaTitle       String?
+  metaDescription String? @db.Text
+  ogTitle         String?
+  ogDescription   String? @db.Text
+  ogImage         String?
+  canonicalUrl    String?
+  noIndex         Boolean @default(false)
+  structuredData  Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  blogPost BlogPost? @relation(fields: [blogPostId], references: [id], onDelete: Cascade)
+
+  @@map("seo_meta")
+}
+
+// ===================== AUDIT LOG =====================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  changes    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
