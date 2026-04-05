@@ -7,3 +7,18 @@ export { customOrderService, CustomOrderService } from './custom-order.service';
 export type { CustomOrderListFilters } from './custom-order.service';
 export { channelSyncService, ChannelSyncService } from './channel-sync.service';
 export { newsletterService, NewsletterService } from './newsletter.service';
+export { analyticsService, AnalyticsService } from './analytics.service';
+export type {
+  PeriodStats,
+  DailyRevenue,
+  TopProduct,
+  OrdersBySource,
+  OrdersByStatus,
+  CustomerStats,
+  ConversionFunnel,
+  LowStockAlert,
+  ActivityItem,
+  ActivityType,
+} from './analytics.service';
+export { bundleService, BundleService } from './bundle.service';
+export type { BundleItem, BundleCreateInput, BundleDetail } from './bundle.service';
