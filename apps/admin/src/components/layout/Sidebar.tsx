@@ -23,6 +23,7 @@ import {
   X,
   Store,
   Palette,
+  Layers,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -48,6 +49,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'SEO',        href: '/seo',        icon: Search },
   { label: 'Channels',   href: '/channels',   icon: Radio },
   { label: 'Sync',       href: '/sync',       icon: RefreshCw },
+  { label: 'Bundles',    href: '/bundles',    icon: Layers },
   { label: 'Analytics',  href: '/analytics',  icon: BarChart2 },
   { label: 'Settings',   href: '/settings',   icon: Settings },
 ];
