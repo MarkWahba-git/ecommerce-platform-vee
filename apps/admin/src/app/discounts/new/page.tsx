@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 // Types
 // ---------------------------------------------------------------------------
 
-type DiscountType = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'FREE_SHIPPING';
+type DiscountType = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'FREE_SHIPPING' | 'BUY_X_GET_Y';
 
 interface FormErrors {
   code?: string;
@@ -20,6 +20,9 @@ interface FormErrors {
   perCustomerLimit?: string;
   startsAt?: string;
   expiresAt?: string;
+  buyQuantity?: string;
+  getQuantity?: string;
+  qualifyingProductIds?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +91,11 @@ export default function DiscountNewPage() {
   const [startsAt, setStartsAt] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [isActive, setIsActive] = useState(true);
+  // BUY_X_GET_Y specific fields
+  const [buyQuantity, setBuyQuantity] = useState('1');
+  const [getQuantity, setGetQuantity] = useState('1');
+  const [qualifyingProductIds, setQualifyingProductIds] = useState('');
+  const [getProductId, setGetProductId] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -98,10 +106,17 @@ export default function DiscountNewPage() {
     else if (!/^[A-Z0-9_-]{2,32}$/.test(code.trim()))
       e.code = 'Code must be 2–32 uppercase letters, digits, underscores, or hyphens.';
 
-    if (type !== 'FREE_SHIPPING') {
+    if (type !== 'FREE_SHIPPING' && type !== 'BUY_X_GET_Y') {
       const v = parseFloat(value);
       if (!value || isNaN(v) || v <= 0) e.value = 'Enter a positive discount value.';
       if (type === 'PERCENTAGE' && v > 100) e.value = 'Percentage cannot exceed 100.';
+    }
+
+    if (type === 'BUY_X_GET_Y') {
+      const bq = parseInt(buyQuantity);
+      if (!buyQuantity || isNaN(bq) || bq < 1) e.buyQuantity = 'Must be a positive integer.';
+      const gq = parseInt(getQuantity);
+      if (!getQuantity || isNaN(gq) || gq < 1) e.getQuantity = 'Must be a positive integer.';
     }
 
     if (minOrderAmount && isNaN(parseFloat(minOrderAmount)))
@@ -127,17 +142,34 @@ export default function DiscountNewPage() {
     setSubmitting(true);
     setApiError(null);
     try {
+      // Build applicableTo for BUY_X_GET_Y
+      let applicableTo: Record<string, unknown> | null = null;
+      if (type === 'BUY_X_GET_Y') {
+        applicableTo = {
+          buyQuantity: parseInt(buyQuantity),
+          getQuantity: parseInt(getQuantity),
+          ...(getProductId.trim() && { getProductId: getProductId.trim() }),
+          ...(qualifyingProductIds.trim() && {
+            productIds: qualifyingProductIds
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean),
+          }),
+        };
+      }
+
       const res = await fetch('/api/discounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code: code.trim().toUpperCase(),
           type,
-          value: type !== 'FREE_SHIPPING' ? parseFloat(value) : 0,
+          value: type !== 'FREE_SHIPPING' && type !== 'BUY_X_GET_Y' ? parseFloat(value) : 0,
           minOrderAmount: minOrderAmount ? parseFloat(minOrderAmount) : null,
           maxDiscountAmount: maxDiscountAmount ? parseFloat(maxDiscountAmount) : null,
           usageLimit: usageLimit ? parseInt(usageLimit) : null,
           perCustomerLimit: perCustomerLimit ? parseInt(perCustomerLimit) : null,
+          applicableTo,
           startsAt: startsAt || null,
           expiresAt: expiresAt || null,
           isActive,
@@ -216,11 +248,12 @@ export default function DiscountNewPage() {
                 <option value="PERCENTAGE">Percentage (%)</option>
                 <option value="FIXED_AMOUNT">Fixed Amount (€)</option>
                 <option value="FREE_SHIPPING">Free Shipping</option>
+                <option value="BUY_X_GET_Y">Buy X Get Y Free</option>
               </Select>
             </Field>
 
             {/* Value */}
-            {type !== 'FREE_SHIPPING' && (
+            {type !== 'FREE_SHIPPING' && type !== 'BUY_X_GET_Y' && (
               <Field
                 label={type === 'PERCENTAGE' ? 'Discount Percentage *' : 'Discount Amount (€) *'}
                 error={errors.value}
@@ -250,6 +283,68 @@ export default function DiscountNewPage() {
               </Field>
             )}
 
+            {/* BUY_X_GET_Y configuration */}
+            {type === 'BUY_X_GET_Y' && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field
+                    label="Buy Quantity *"
+                    error={errors.buyQuantity}
+                    hint="Customer must add this many qualifying items."
+                  >
+                    <Input
+                      type="number"
+                      value={buyQuantity}
+                      onChange={(e) => setBuyQuantity(e.target.value)}
+                      placeholder="2"
+                      min={1}
+                      step={1}
+                      error={!!errors.buyQuantity}
+                    />
+                  </Field>
+                  <Field
+                    label="Get Quantity (Free) *"
+                    error={errors.getQuantity}
+                    hint="Number of cheapest items given free."
+                  >
+                    <Input
+                      type="number"
+                      value={getQuantity}
+                      onChange={(e) => setGetQuantity(e.target.value)}
+                      placeholder="1"
+                      min={1}
+                      step={1}
+                      error={!!errors.getQuantity}
+                    />
+                  </Field>
+                </div>
+                <Field
+                  label="Qualifying Product IDs"
+                  error={errors.qualifyingProductIds}
+                  hint="Comma-separated product IDs that qualify for the buy side. Leave blank to allow all products."
+                >
+                  <Input
+                    type="text"
+                    value={qualifyingProductIds}
+                    onChange={(e) => setQualifyingProductIds(e.target.value)}
+                    placeholder="prod_abc123, prod_def456"
+                    error={!!errors.qualifyingProductIds}
+                  />
+                </Field>
+                <Field
+                  label="Free Product ID"
+                  hint="Specific product ID to give for free. Leave blank to use the cheapest qualifying item(s)."
+                >
+                  <Input
+                    type="text"
+                    value={getProductId}
+                    onChange={(e) => setGetProductId(e.target.value)}
+                    placeholder="prod_xyz789"
+                  />
+                </Field>
+              </>
+            )}
+
             {/* Min order */}
             <Field
               label="Minimum Order Amount (€)"
@@ -267,7 +362,7 @@ export default function DiscountNewPage() {
               />
             </Field>
 
-            {/* Max discount */}
+            {/* Max discount — only for percentage coupons */}
             {type === 'PERCENTAGE' && (
               <Field
                 label="Max Discount Amount (€)"

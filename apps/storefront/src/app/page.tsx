@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { getTranslations } from '@/lib/i18n';
 
+// ISR: Homepage content rarely changes — revalidate once per hour
+export const revalidate = 3600;
+
 export default async function HomePage() {
   const t = await getTranslations();
 

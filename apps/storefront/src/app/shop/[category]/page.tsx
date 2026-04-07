@@ -5,7 +5,8 @@ import { ProductGrid } from '@/components/product/ProductGrid';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import type { ProductCardData } from '@/components/product/ProductCard';
 
-export const revalidate = 3600; // ISR: revalidate every hour
+// ISR: Category pages change moderately — revalidate every 10 minutes
+export const revalidate = 600;
 
 interface CategoryPageProps {
   params: Promise<{ category: string }>;

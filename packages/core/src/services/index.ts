@@ -1,4 +1,5 @@
 export { productService, ProductService } from './product.service';
+export { categoryService, CategoryService } from './category.service';
 export { inventoryService, InventoryService } from './inventory.service';
 export { cartService, CartService } from './cart.service';
 export { orderService, OrderService } from './order.service';
