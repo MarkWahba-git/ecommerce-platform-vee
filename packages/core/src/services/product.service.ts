@@ -2,86 +2,121 @@ import { db, type Prisma } from '@vee/db';
 import type { ProductListInput, ProductCreateInput } from '@vee/shared';
 import { generateSlug } from '@vee/shared';
 import { meili, PRODUCT_INDEX } from '../lib/meilisearch';
+import { cache, hashObject } from '../lib/cache';
+
+const PRODUCT_TTL = 5 * 60;  // 5 minutes
+const LIST_TTL = 2 * 60;     // 2 minutes
+
+function productKey(id: string) {
+  return `product:${id}`;
+}
+
+function productSlugKey(slug: string) {
+  return `product:slug:${slug}`;
+}
+
+function productListKey(input: ProductListInput) {
+  return `products:list:${hashObject(input)}`;
+}
 
 export class ProductService {
   /** List products with filters and pagination */
   async list(input: ProductListInput) {
-    const { page, limit, type, status, categoryId, search, sortBy, sortOrder } = input;
-    const skip = (page - 1) * limit;
+    const cacheKey = productListKey(input);
+    return cache.getOrSet(
+      cacheKey,
+      async () => {
+        const { page, limit, type, status, categoryId, search, sortBy, sortOrder } = input;
+        const skip = (page - 1) * limit;
 
-    const where: Prisma.ProductWhereInput = {
-      ...(type && { type }),
-      ...(status && { status }),
-      ...(categoryId && {
-        categories: { some: { categoryId } },
-      }),
-      ...(search && {
-        OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          { sku: { contains: search, mode: 'insensitive' } },
-        ],
-      }),
-    };
+        const where: Prisma.ProductWhereInput = {
+          ...(type && { type }),
+          ...(status && { status }),
+          ...(categoryId && {
+            categories: { some: { categoryId } },
+          }),
+          ...(search && {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { sku: { contains: search, mode: 'insensitive' } },
+            ],
+          }),
+        };
 
-    const [items, total] = await Promise.all([
-      db.product.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { [sortBy]: sortOrder },
-        include: {
-          images: { where: { isPrimary: true }, take: 1 },
-          categories: { include: { category: { select: { slug: true } } }, take: 1 },
-          _count: { select: { variants: true, reviews: true } },
-        },
-      }),
-      db.product.count({ where }),
-    ]);
+        const [items, total] = await Promise.all([
+          db.product.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { [sortBy]: sortOrder },
+            include: {
+              images: { where: { isPrimary: true }, take: 1 },
+              categories: { include: { category: { select: { slug: true } } }, take: 1 },
+              _count: { select: { variants: true, reviews: true } },
+            },
+          }),
+          db.product.count({ where }),
+        ]);
 
-    return {
-      items,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+        return {
+          items,
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        };
+      },
+      LIST_TTL,
+    );
   }
 
   /** Get a single product by slug with all relations */
   async getBySlug(slug: string) {
-    return db.product.findUnique({
-      where: { slug },
-      include: {
-        images: { orderBy: { sortOrder: 'asc' } },
-        variants: {
-          where: { isActive: true },
-          orderBy: { sortOrder: 'asc' },
-          include: { inventory: true },
-        },
-        files: { where: { isPreview: true } },
-        personalizationFields: { orderBy: { sortOrder: 'asc' } },
-        categories: { include: { category: true } },
-        tags: { include: { tag: true } },
-        reviews: { where: { isApproved: true }, orderBy: { createdAt: 'desc' }, take: 10 },
-        seoMeta: true,
-      },
-    });
+    const cacheKey = productSlugKey(slug);
+    return cache.getOrSet(
+      cacheKey,
+      () =>
+        db.product.findUnique({
+          where: { slug },
+          include: {
+            images: { orderBy: { sortOrder: 'asc' } },
+            variants: {
+              where: { isActive: true },
+              orderBy: { sortOrder: 'asc' },
+              include: { inventory: true },
+            },
+            files: { where: { isPreview: true } },
+            personalizationFields: { orderBy: { sortOrder: 'asc' } },
+            categories: { include: { category: true } },
+            tags: { include: { tag: true } },
+            reviews: { where: { isApproved: true }, orderBy: { createdAt: 'desc' }, take: 10 },
+            seoMeta: true,
+          },
+        }),
+      PRODUCT_TTL,
+    );
   }
 
   /** Get a product by ID */
   async getById(id: string) {
-    return db.product.findUnique({
-      where: { id },
-      include: {
-        images: { orderBy: { sortOrder: 'asc' } },
-        variants: { orderBy: { sortOrder: 'asc' }, include: { inventory: true } },
-        files: true,
-        personalizationFields: { orderBy: { sortOrder: 'asc' } },
-        categories: { include: { category: true } },
-        tags: { include: { tag: true } },
-        seoMeta: true,
-      },
-    });
+    const cacheKey = productKey(id);
+    return cache.getOrSet(
+      cacheKey,
+      () =>
+        db.product.findUnique({
+          where: { id },
+          include: {
+            images: { orderBy: { sortOrder: 'asc' } },
+            variants: { orderBy: { sortOrder: 'asc' }, include: { inventory: true } },
+            files: true,
+            personalizationFields: { orderBy: { sortOrder: 'asc' } },
+            categories: { include: { category: true } },
+            tags: { include: { tag: true } },
+            seoMeta: true,
+          },
+        }),
+      PRODUCT_TTL,
+    );
   }
 
   /** Create a new product */
@@ -126,6 +161,9 @@ export class ProductService {
     // Index in Meilisearch
     await this.indexProduct(product.id);
 
+    // Invalidate list caches so new product appears
+    await cache.delPattern('products:list:*');
+
     return product;
   }
 
@@ -152,17 +190,30 @@ export class ProductService {
     });
 
     await this.indexProduct(product.id);
+
+    // Invalidate specific product caches + all list caches
+    await cache.invalidate(productKey(product.id), productSlugKey(product.slug));
+    await cache.delPattern('products:list:*');
+
     return product;
   }
 
   /** Delete a product */
   async delete(id: string) {
+    // Fetch slug before deletion so we can invalidate the slug cache
+    const existing = await db.product.findUnique({ where: { id }, select: { slug: true } });
+
     await db.product.delete({ where: { id } });
     try {
       await meili.index(PRODUCT_INDEX).deleteDocument(id);
     } catch {
       // Ignore if not indexed
     }
+
+    // Invalidate caches
+    await cache.invalidate(productKey(id));
+    if (existing) await cache.invalidate(productSlugKey(existing.slug));
+    await cache.delPattern('products:list:*');
   }
 
   /** Index a product in Meilisearch */

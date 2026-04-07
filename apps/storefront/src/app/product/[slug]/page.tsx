@@ -8,7 +8,8 @@ import { AddToCartButton } from '@/components/product/AddToCartButton';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { PersonalizationForm } from './PersonalizationForm';
 
-export const revalidate = 3600; // ISR: revalidate every hour
+// ISR: Product pages can change (stock, price, reviews) — revalidate every 5 minutes
+export const revalidate = 300;
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;

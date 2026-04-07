@@ -1,7 +1,7 @@
 import { Worker } from 'bullmq';
 import Redis from 'ioredis';
 import { render } from '@react-email/render';
-import { channelSyncService, resend, EMAIL_FROM } from '@vee/core';
+import { channelSyncService, resend, EMAIL_FROM, initSentry, captureException, createLogger } from '@vee/core';
 import { db } from '@vee/db';
 import {
   OrderConfirmationEmail,
@@ -9,6 +9,11 @@ import {
   DownloadReadyEmail,
   AbandonedCartEmail,
 } from '@vee/email-templates';
+import { startHealthServer, registerHealthTargets } from './health';
+
+// Initialise Sentry and structured logger before anything else
+initSentry();
+const logger = createLogger('Worker');
 
 const connection = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
@@ -16,7 +21,7 @@ const connection = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', 
 
 const STORE_URL = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? 'https://vee-handmade.de';
 
-console.log('Starting Vee workers...');
+logger.info('Starting Vee workers...');
 
 // ─── Sync Inventory Worker ────────────────────────────────────────────────────
 // Job data: { marketplaceId: string }
@@ -24,14 +29,14 @@ const syncInventoryWorker = new Worker(
   'sync-inventory',
   async (job) => {
     const { marketplaceId } = job.data as { marketplaceId: string };
-    console.log(`[sync-inventory] job=${job.id} marketplaceId=${marketplaceId}`);
+    logger.info('Job started', { queue: 'sync-inventory', jobId: job.id, marketplaceId });
 
     if (!marketplaceId) {
       throw new Error('sync-inventory job missing marketplaceId');
     }
 
     await channelSyncService.syncInventoryToChannel(marketplaceId);
-    console.log(`[sync-inventory] job=${job.id} completed`);
+    logger.info('Job completed', { queue: 'sync-inventory', jobId: job.id });
   },
   {
     connection,
@@ -46,7 +51,7 @@ const importOrdersWorker = new Worker(
   'import-orders',
   async (job) => {
     const { marketplaceId, since } = job.data as { marketplaceId: string; since?: string };
-    console.log(`[import-orders] job=${job.id} marketplaceId=${marketplaceId} since=${since}`);
+    logger.info('Job started', { queue: 'import-orders', jobId: job.id, marketplaceId, since });
 
     if (!marketplaceId) {
       throw new Error('import-orders job missing marketplaceId');
@@ -54,7 +59,7 @@ const importOrdersWorker = new Worker(
 
     const sinceDate = since ? new Date(since) : undefined;
     await channelSyncService.importOrdersFromChannel(marketplaceId, sinceDate);
-    console.log(`[import-orders] job=${job.id} completed`);
+    logger.info('Job completed', { queue: 'import-orders', jobId: job.id });
   },
   {
     connection,
@@ -68,14 +73,14 @@ const pushFulfillmentWorker = new Worker(
   'push-fulfillment',
   async (job) => {
     const { orderId } = job.data as { orderId: string };
-    console.log(`[push-fulfillment] job=${job.id} orderId=${orderId}`);
+    logger.info('Job started', { queue: 'push-fulfillment', jobId: job.id, orderId });
 
     if (!orderId) {
       throw new Error('push-fulfillment job missing orderId');
     }
 
     await channelSyncService.pushFulfillmentToChannel(orderId);
-    console.log(`[push-fulfillment] job=${job.id} completed`);
+    logger.info('Job completed', { queue: 'push-fulfillment', jobId: job.id });
   },
   {
     connection,
@@ -89,7 +94,7 @@ const emailWorker = new Worker(
   'email',
   async (job) => {
     const { type, to } = job.data as { type: string; to: string };
-    console.log(`[email] job=${job.id} type=${type} to=${to}`);
+    logger.info('Job started', { queue: 'email', jobId: job.id, type, to });
 
     if (!type || !to) {
       throw new Error('email job missing required fields: type, to');
@@ -251,7 +256,7 @@ const emailWorker = new Worker(
         throw new Error(`Unknown email type: "${type}"`);
     }
 
-    console.log(`[email] job=${job.id} type=${type} sent`);
+    logger.info('Job completed', { queue: 'email', jobId: job.id, type });
   },
   {
     connection,
@@ -265,14 +270,14 @@ const reconciliationWorker = new Worker(
   'reconciliation',
   async (job) => {
     const { marketplaceId } = job.data as { marketplaceId: string };
-    console.log(`[reconciliation] job=${job.id} marketplaceId=${marketplaceId}`);
+    logger.info('Job started', { queue: 'reconciliation', jobId: job.id, marketplaceId });
 
     if (!marketplaceId) {
       throw new Error('reconciliation job missing marketplaceId');
     }
 
     await channelSyncService.reconcile(marketplaceId);
-    console.log(`[reconciliation] job=${job.id} completed`);
+    logger.info('Job completed', { queue: 'reconciliation', jobId: job.id });
   },
   {
     connection,
@@ -285,7 +290,7 @@ const reconciliationWorker = new Worker(
 const abandonedCartWorker = new Worker(
   'abandoned-cart',
   async (job) => {
-    console.log(`[abandoned-cart] job=${job.id} scanning for stale carts`);
+    logger.info('Job started', { queue: 'abandoned-cart', jobId: job.id });
 
     // Find carts that have been idle for more than 2 hours and have items
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
@@ -359,16 +364,18 @@ const abandonedCartWorker = new Worker(
         });
         sent++;
       } catch (err) {
-        console.error(
-          `[abandoned-cart] Failed to send reminder to ${cart.customer.email}:`,
-          err instanceof Error ? err.message : err,
-        );
+        const error = err instanceof Error ? err : new Error(String(err));
+        logger.error('Failed to send abandoned cart reminder', error, { email: cart.customer.email });
+        captureException(error, { queue: 'abandoned-cart', customerEmail: cart.customer.email });
       }
     }
 
-    console.log(
-      `[abandoned-cart] job=${job.id} processed ${staleCarts.length} stale carts, sent ${sent} reminders`,
-    );
+    logger.info('Job completed', {
+      queue: 'abandoned-cart',
+      jobId: job.id,
+      scanned: staleCarts.length,
+      sent,
+    });
   },
   {
     connection,
@@ -386,8 +393,13 @@ const workers = [
   abandonedCartWorker,
 ];
 
+// Register workers + Redis with health server, then start it
+registerHealthTargets(workers, connection);
+const healthServer = startHealthServer();
+
 async function shutdown() {
-  console.log('Shutting down workers...');
+  logger.info('Shutting down workers...');
+  healthServer.close();
   await Promise.all(workers.map((w) => w.close()));
   await connection.quit();
   process.exit(0);
@@ -399,8 +411,9 @@ process.on('SIGINT', shutdown);
 // Worker error logging
 for (const worker of workers) {
   worker.on('failed', (job, err) => {
-    console.error(`[${worker.name}] job=${job?.id} FAILED:`, err.message);
+    logger.error(`Job failed`, err, { queue: worker.name, jobId: job?.id });
+    captureException(err, { queue: worker.name, jobId: job?.id });
   });
 }
 
-console.log('All workers started successfully.');
+logger.info('All workers started successfully.');

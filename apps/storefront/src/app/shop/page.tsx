@@ -4,6 +4,9 @@ import { ProductGrid } from '@/components/product/ProductGrid';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import type { ProductCardData } from '@/components/product/ProductCard';
 
+// ISR: Product listings change frequently — revalidate every 5 minutes
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: 'Shop',
   description:

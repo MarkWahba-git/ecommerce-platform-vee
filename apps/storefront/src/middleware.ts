@@ -1,6 +1,28 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { type Locale, SUPPORTED_LOCALES, DEFAULT_LOCALE } from '@vee/shared';
 
+/**
+ * Minimal structured logger for use in Edge middleware.
+ * We cannot import from @vee/core here because that package pulls in
+ * Node.js-only modules (ioredis, Prisma) that are incompatible with the
+ * Edge runtime.  This thin wrapper replicates the same JSON output format.
+ */
+function logRequest(method: string, path: string, status: number, durationMs: number, locale: string) {
+  const entry = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    context: 'Middleware',
+    message: 'API request',
+    method,
+    path,
+    status,
+    durationMs,
+    locale,
+  });
+  // eslint-disable-next-line no-console
+  console.log(entry);
+}
+
 const LOCALE_COOKIE = 'vee_locale';
 const LOCALE_HEADER = 'x-vee-locale';
 
@@ -38,6 +60,10 @@ export function detectLocale(request: NextRequest): Locale {
 }
 
 export function middleware(request: NextRequest) {
+  const start = Date.now();
+  const { method, nextUrl } = request;
+  const path = nextUrl.pathname;
+
   const locale = detectLocale(request);
 
   // Propagate locale to server components via a custom request header
@@ -58,6 +84,13 @@ export function middleware(request: NextRequest) {
     });
   }
 
+  // Log API requests; skip health check endpoint to avoid log noise
+  if (path.startsWith('/api/') && path !== '/api/health') {
+    const durationMs = Date.now() - start;
+    const status = response.status;
+    logRequest(method, path, status, durationMs, locale);
+  }
+
   return response;
 }
 
@@ -68,8 +101,11 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimisation)
      * - favicon.ico
-     * - API routes under /api
+     *
+     * API routes are now included so that we can log them.
+     * The health check endpoint (/api/health) is explicitly excluded from logging
+     * inside the middleware function itself.
      */
-    '/((?!_next/static|_next/image|favicon.ico|api/).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
