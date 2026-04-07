@@ -5,17 +5,19 @@
  * module can be imported unconditionally without crashing in local dev.
  *
  * Requires @sentry/node to be installed (declared in package.json dependencies).
+ * Run `pnpm install` to pick it up after updating package.json.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const SentrySDK: typeof import('@sentry/node') | null = (() => {
-  try {
-    // Dynamic require allows graceful fallback if package isn't installed yet
-    return require('@sentry/node') as typeof import('@sentry/node');
-  } catch {
-    return null;
-  }
-})();
+// We use a dynamic require so the module still loads gracefully if @sentry/node
+// hasn't been installed yet (e.g., in a fresh checkout before `pnpm install`).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let SentrySDK: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  SentrySDK = require('@sentry/node');
+} catch {
+  // @sentry/node not installed — all functions will be no-ops
+}
 
 let _initialized = false;
 
@@ -40,9 +42,9 @@ export function captureException(
   if (!_initialized || !SentrySDK) return;
 
   if (context) {
-    SentrySDK.withScope((scope) => {
-      scope.setExtras(context as Record<string, unknown>);
-      SentrySDK!.captureException(error);
+    SentrySDK.withScope((scope: { setExtras: (e: Record<string, unknown>) => void }) => {
+      scope.setExtras(context);
+      SentrySDK.captureException(error);
     });
   } else {
     SentrySDK.captureException(error);
@@ -62,12 +64,15 @@ export function setUser(user: { id: string; email?: string }): void {
   SentrySDK.setUser(user);
 }
 
-export function withScope(
-  callback: (scope: import('@sentry/node').Scope) => void,
-): void {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function withScope(callback: (scope: any) => void): void {
   if (!SentrySDK) {
     // Call with a stub scope so callers don't need to null-check
-    callback({ setExtras: () => {}, setTag: () => {}, setUser: () => {} } as unknown as import('@sentry/node').Scope);
+    callback({
+      setExtras: () => {},
+      setTag: (_key: string, _value: string) => {},
+      setUser: (_user: unknown) => {},
+    });
     return;
   }
   if (!_initialized) {

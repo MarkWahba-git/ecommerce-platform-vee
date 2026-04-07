@@ -290,7 +290,7 @@ const reconciliationWorker = new Worker(
 const abandonedCartWorker = new Worker(
   'abandoned-cart',
   async (job) => {
-    console.log(`[abandoned-cart] job=${job.id} scanning for stale carts`);
+    logger.info('Job started', { queue: 'abandoned-cart', jobId: job.id });
 
     // Find carts that have been idle for more than 2 hours and have items
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
@@ -364,16 +364,18 @@ const abandonedCartWorker = new Worker(
         });
         sent++;
       } catch (err) {
-        console.error(
-          `[abandoned-cart] Failed to send reminder to ${cart.customer.email}:`,
-          err instanceof Error ? err.message : err,
-        );
+        const error = err instanceof Error ? err : new Error(String(err));
+        logger.error('Failed to send abandoned cart reminder', error, { email: cart.customer.email });
+        captureException(error, { queue: 'abandoned-cart', customerEmail: cart.customer.email });
       }
     }
 
-    console.log(
-      `[abandoned-cart] job=${job.id} processed ${staleCarts.length} stale carts, sent ${sent} reminders`,
-    );
+    logger.info('Job completed', {
+      queue: 'abandoned-cart',
+      jobId: job.id,
+      scanned: staleCarts.length,
+      sent,
+    });
   },
   {
     connection,
