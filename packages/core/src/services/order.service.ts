@@ -2,6 +2,7 @@ import { db, type OrderStatus } from '@vee/db';
 import type { OrderListInput, CheckoutInput } from '@vee/shared';
 import { ORDER_STATUS_TRANSITIONS } from '@vee/shared';
 import { inventoryService } from './inventory.service';
+import { couponService } from './coupon.service';
 
 export class OrderService {
   /** Generate order number: VEE-YYYY-NNNNN */
@@ -106,6 +107,11 @@ export class OrderService {
       if (item.variantId && item.product.type !== 'DIGITAL') {
         await inventoryService.reserve(item.variantId, item.quantity);
       }
+    }
+
+    // Increment coupon usage if one was applied
+    if (input.couponCode) {
+      await couponService.incrementUsage(input.couponCode);
     }
 
     // Clear the cart

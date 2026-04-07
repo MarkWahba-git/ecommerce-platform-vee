@@ -1,5 +1,6 @@
 import { db } from '@vee/db';
 import type { AddToCartInput, UpdateCartItemInput } from '@vee/shared';
+import { couponService } from './coupon.service';
 
 export class CartService {
   /** Get or create a cart by customer ID or session ID */
@@ -115,17 +116,40 @@ export class CartService {
     return db.cartItem.delete({ where: { id: itemId } });
   }
 
-  /** Apply coupon code */
+  /** Apply coupon code with full validation against cart context */
   async applyCoupon(cartId: string, code: string) {
-    const coupon = await db.coupon.findUnique({ where: { code } });
-    if (!coupon || !coupon.isActive) {
-      throw new Error('Invalid or inactive coupon code');
-    }
-    if (coupon.expiresAt && coupon.expiresAt < new Date()) {
-      throw new Error('Coupon has expired');
-    }
-    if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
-      throw new Error('Coupon usage limit reached');
+    // Load cart with items to validate against full cart context
+    const cart = await db.cart.findUniqueOrThrow({
+      where: { id: cartId },
+      include: {
+        items: {
+          select: {
+            productId: true,
+            quantity: true,
+            unitPrice: true,
+          },
+        },
+      },
+    });
+
+    const subtotal = cart.items.reduce(
+      (sum, item) => sum + Number(item.unitPrice) * item.quantity,
+      0,
+    );
+
+    const cartData = {
+      customerId: cart.customerId ?? undefined,
+      items: cart.items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: Number(item.unitPrice),
+      })),
+      subtotal,
+    };
+
+    const result = await couponService.validate(code, cartData);
+    if (!result.valid) {
+      throw new Error(result.reason);
     }
 
     return db.cart.update({

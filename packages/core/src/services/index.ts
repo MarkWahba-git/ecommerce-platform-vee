@@ -32,3 +32,21 @@ export type {
   AmazonNotificationSubscription,
   AmazonDestination,
 } from './webhook.service';
+export { reviewService, ReviewService } from './review.service';
+export type {
+  ReviewStatus,
+  ReviewListFilters,
+  ReviewStats,
+  ProductRatingStats,
+  RatingDistribution,
+} from './review.service';
+export { couponService, CouponService } from './coupon.service';
+export type {
+  CartItem as CouponCartItem,
+  CartData as CouponCartData,
+  ValidateResult as CouponValidateResult,
+  ApplicableTo as CouponApplicableTo,
+  CouponListFilters,
+  CouponCreateInput,
+  CouponUpdateInput,
+} from './coupon.service';
