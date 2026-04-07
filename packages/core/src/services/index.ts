@@ -25,3 +25,10 @@ export type { BundleItem, BundleCreateInput, BundleDetail } from './bundle.servi
 export { shippingService, ShippingService } from './shipping.service';
 export type { PackageInfo, ShippingRate } from './shipping.service';
 export { imageUploadService, ImageUploadService } from './image-upload.service';
+export { webhookService, WebhookService } from './webhook.service';
+export type {
+  EtsyWebhook,
+  EtsyWebhookCreateResult,
+  AmazonNotificationSubscription,
+  AmazonDestination,
+} from './webhook.service';

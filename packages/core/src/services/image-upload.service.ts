@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '@vee/db';
+import type { Prisma } from '@vee/db';
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { s3, getUploadUrl } from '../lib/s3';
 
@@ -54,7 +55,7 @@ export class ImageUploadService {
   /**
    * Validate content type, generate an S3 key, and return a presigned PUT URL.
    */
-  async requestUpload(productId: string, fileName: string, contentType: string) {
+  async requestUpload(productId: string, _fileName: string, contentType: string) {
     if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
       throw new Error(
         `Unsupported image type "${contentType}". Allowed: jpeg, png, webp, gif.`,
@@ -85,7 +86,7 @@ export class ImageUploadService {
   ) {
     const url = buildPublicUrl(fileKey);
 
-    return db.$transaction(async (tx) => {
+    return db.$transaction(async (tx: Prisma.TransactionClient) => {
       if (data.isPrimary) {
         await tx.productImage.updateMany({
           where: { productId },
@@ -184,6 +185,34 @@ export class ImageUploadService {
     ]);
   }
 
+  /**
+   * Update mutable fields on a ProductImage (altText, isPrimary).
+   * When setting as primary, all sibling images are demoted first.
+   */
+  async updateImage(
+    imageId: string,
+    data: { altText?: string | null; isPrimary?: boolean },
+  ) {
+    const image = await db.productImage.findUniqueOrThrow({ where: { id: imageId } });
+
+    return db.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (data.isPrimary) {
+        await tx.productImage.updateMany({
+          where: { productId: image.productId },
+          data: { isPrimary: false },
+        });
+      }
+
+      return tx.productImage.update({
+        where: { id: imageId },
+        data: {
+          ...(data.altText !== undefined && { altText: data.altText }),
+          ...(data.isPrimary !== undefined && { isPrimary: data.isPrimary }),
+        },
+      });
+    });
+  }
+
   // ── Digital file upload ───────────────────────────────────────────────────
 
   /**
@@ -219,6 +248,21 @@ export class ImageUploadService {
         isPreview: data.isPreview ?? false,
       },
     });
+  }
+
+  /**
+   * Delete a ProductFile record from the database and, best-effort, from S3.
+   */
+  async deleteFile(fileId: string) {
+    const file = await db.productFile.findUniqueOrThrow({ where: { id: fileId } });
+
+    await db.productFile.delete({ where: { id: fileId } });
+
+    try {
+      await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: file.fileKey }));
+    } catch (err) {
+      console.warn('[ImageUploadService] S3 file deletion failed for key:', file.fileKey, err);
+    }
   }
 }
 

@@ -17,7 +17,7 @@ export async function PATCH(
     const { id, imageId } = await params;
     const body = await request.json();
     const { altText, isPrimary } = body as {
-      altText?: string;
+      altText?: string | null;
       isPrimary?: boolean;
     };
 
@@ -29,18 +29,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
-    if (isPrimary === true) {
-      const [, updated] = await imageUploadService.setPrimaryImage(imageId);
-      return NextResponse.json(updated);
-    }
-
-    const updated = await db.productImage.update({
-      where: { id: imageId },
-      data: {
-        ...(altText !== undefined && { altText }),
-      },
-    });
-
+    const updated = await imageUploadService.updateImage(imageId, { altText, isPrimary });
     return NextResponse.json(updated);
   } catch (error) {
     if (error instanceof Error) {

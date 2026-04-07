@@ -4,6 +4,8 @@ import { useState, useId, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { generateSlug } from '@vee/shared';
 import type { productService } from '@vee/core';
+import { ImageUploader } from '@/components/ImageUploader';
+import { FileUploader } from '@/components/FileUploader';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -12,6 +14,7 @@ import type { productService } from '@vee/core';
 /** Full product shape returned by productService.getById() */
 type ProductWithRelations = NonNullable<Awaited<ReturnType<typeof productService.getById>>>;
 type ProductImage = ProductWithRelations['images'][number];
+type ProductFile = ProductWithRelations['files'][number];
 type ProductVariant = ProductWithRelations['variants'][number];
 type ProductCategory = ProductWithRelations['categories'][number];
 type ProductTag = ProductWithRelations['tags'][number];
@@ -206,6 +209,7 @@ export function ProductEditForm({ product }: { product: ProductWithRelations }) 
   const [savedForm, setSavedForm] = useState<FormState>(() => productToFormState(product));
   const [status, setStatus] = useState(product.status);
   const [images, setImages] = useState<ProductImage[]>(product.images);
+  const [files, setFiles] = useState<ProductFile[]>(product.files);
   const [variants, setVariants] = useState<ProductVariant[]>(product.variants);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -327,22 +331,6 @@ export function ProductEditForm({ product }: { product: ProductWithRelations }) 
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Image actions (optimistic UI — real upload is future work)
-  // ---------------------------------------------------------------------------
-
-  async function handleSetPrimaryImage(imageId: string) {
-    setImages((prev) =>
-      prev.map((img) => ({ ...img, isPrimary: img.id === imageId })),
-    );
-    // In real implementation, call PATCH on image endpoint
-  }
-
-  async function handleDeleteImage(imageId: string) {
-    setImages((prev) => prev.filter((img) => img.id !== imageId));
-    // In real implementation, call DELETE on image endpoint
   }
 
   // ---------------------------------------------------------------------------
@@ -751,6 +739,24 @@ export function ProductEditForm({ product }: { product: ProductWithRelations }) 
         </section>
       )}
 
+      {/* ── Digital Files ── */}
+      {isDigital && (
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-gray-900">Digital Files</h3>
+            <span className="text-xs text-gray-500">{files.length} file{files.length !== 1 ? 's' : ''}</span>
+          </div>
+          <p className="text-xs text-gray-500">
+            Upload the downloadable files for this product. Customers receive access after purchase.
+          </p>
+          <FileUploader
+            productId={product.id}
+            initialFiles={files}
+            onFilesChange={(updated) => setFiles(updated as ProductFile[])}
+          />
+        </section>
+      )}
+
       {/* ── Made-to-Order ── */}
       {isPersonalized && (
         <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm space-y-5">
@@ -792,72 +798,11 @@ export function ProductEditForm({ product }: { product: ProductWithRelations }) 
           <span className="text-xs text-gray-500">{images.length} image{images.length !== 1 ? 's' : ''}</span>
         </div>
 
-        {images.length === 0 ? (
-          <div className="rounded-lg border-2 border-dashed border-gray-200 p-8 text-center">
-            <svg
-              className="mx-auto h-10 w-10 text-gray-300"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            <p className="mt-2 text-sm text-gray-500">No images yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-            {images.map((img) => (
-              <div
-                key={img.id}
-                className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 aspect-square group"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={img.url}
-                  alt={img.altText ?? ''}
-                  className="h-full w-full object-cover"
-                />
-                {img.isPrimary && (
-                  <span className="absolute top-1.5 left-1.5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                    Primary
-                  </span>
-                )}
-                {/* Hover actions */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {!img.isPrimary && (
-                    <button
-                      type="button"
-                      onClick={() => handleSetPrimaryImage(img.id)}
-                      className="rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
-                    >
-                      Set Primary
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteImage(img.id)}
-                    className="rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Add image placeholder */}
-        <div className="rounded-lg border-2 border-dashed border-gray-200 p-4 text-center">
-          <p className="text-sm text-gray-500">
-            Image upload coming soon. Images can be uploaded via the media library.
-          </p>
-        </div>
+        <ImageUploader
+          productId={product.id}
+          initialImages={images}
+          onImagesChange={(updated) => setImages(updated as ProductImage[])}
+        />
       </section>
 
       {/* ── Variants ── */}
