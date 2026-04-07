@@ -73,14 +73,14 @@ const pushFulfillmentWorker = new Worker(
   'push-fulfillment',
   async (job) => {
     const { orderId } = job.data as { orderId: string };
-    console.log(`[push-fulfillment] job=${job.id} orderId=${orderId}`);
+    logger.info('Job started', { queue: 'push-fulfillment', jobId: job.id, orderId });
 
     if (!orderId) {
       throw new Error('push-fulfillment job missing orderId');
     }
 
     await channelSyncService.pushFulfillmentToChannel(orderId);
-    console.log(`[push-fulfillment] job=${job.id} completed`);
+    logger.info('Job completed', { queue: 'push-fulfillment', jobId: job.id });
   },
   {
     connection,
@@ -94,7 +94,7 @@ const emailWorker = new Worker(
   'email',
   async (job) => {
     const { type, to } = job.data as { type: string; to: string };
-    console.log(`[email] job=${job.id} type=${type} to=${to}`);
+    logger.info('Job started', { queue: 'email', jobId: job.id, type, to });
 
     if (!type || !to) {
       throw new Error('email job missing required fields: type, to');
@@ -256,7 +256,7 @@ const emailWorker = new Worker(
         throw new Error(`Unknown email type: "${type}"`);
     }
 
-    console.log(`[email] job=${job.id} type=${type} sent`);
+    logger.info('Job completed', { queue: 'email', jobId: job.id, type });
   },
   {
     connection,
@@ -270,14 +270,14 @@ const reconciliationWorker = new Worker(
   'reconciliation',
   async (job) => {
     const { marketplaceId } = job.data as { marketplaceId: string };
-    console.log(`[reconciliation] job=${job.id} marketplaceId=${marketplaceId}`);
+    logger.info('Job started', { queue: 'reconciliation', jobId: job.id, marketplaceId });
 
     if (!marketplaceId) {
       throw new Error('reconciliation job missing marketplaceId');
     }
 
     await channelSyncService.reconcile(marketplaceId);
-    console.log(`[reconciliation] job=${job.id} completed`);
+    logger.info('Job completed', { queue: 'reconciliation', jobId: job.id });
   },
   {
     connection,
