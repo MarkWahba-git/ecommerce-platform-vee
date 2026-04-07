@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitest/config';
-import path from 'path';
 
 export default defineConfig({
   test: {
@@ -10,11 +9,5 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
     },
     mockReset: true,
-  },
-  resolve: {
-    alias: {
-      '@vee/db': path.resolve(__dirname, '../db/src'),
-      '@vee/shared': path.resolve(__dirname, '../shared/src'),
-    },
   },
 });
