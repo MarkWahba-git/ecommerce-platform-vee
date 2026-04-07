@@ -24,3 +24,4 @@ export { bundleService, BundleService } from './bundle.service';
 export type { BundleItem, BundleCreateInput, BundleDetail } from './bundle.service';
 export { shippingService, ShippingService } from './shipping.service';
 export type { PackageInfo, ShippingRate } from './shipping.service';
+export { imageUploadService, ImageUploadService } from './image-upload.service';
